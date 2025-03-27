@@ -1,6 +1,13 @@
 ## Overview
 
-This repository implements an active learning framework where an RL agent interacts with an environment to iteratively improve a surrogate model's performance. The agent selects point from a function domain, receives feedback in the form of rewards based on distance between surrogate model predictions on sequential inerations.
+This repository implements an active learning framework where an RL agent interacts with an environment to iteratively improve a surrogate model's performance. The agent selects point from a function domain, receives feedback in the form of rewards based on distance between surrogate model predictions on sequential inerations. Agent is trained via GGPD algorithm: Deep Deterministic Policy Gradient [1] implementation in PyTorch [2]. Minor changes were made to the backpropagation of the error for the critic and actor. Also another type of noise was used in new task conditions.
+
+[1]   
+Lillicrap, T., Hunt, J. J., Pritzel, A., Heess, N., Erez, T., Tassa, Y., Silver, D. & Wierstra, D. (2015). 
+Continuous control with deep reinforcement learning. International Conference on Learning Representations, 
+abs/1509.02971. https://arxiv.org/abs/1509.02971
+
+[2] https://github.com/ghliu/pytorch-ddpg
 
 ## Key Components
 
