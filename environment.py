@@ -84,7 +84,6 @@ class Environment:
         self.pred1 = []
        
         self.m.fit(self.X_init,self.y_init,first = True)
-        print(self.m.params())
         
         pred = self.m.predict(self.test_set)
         self.mse_loss = mean_squared_error(self.test_set_y,pred)
