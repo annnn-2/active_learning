@@ -61,5 +61,5 @@ active_learning/
 
 - **Flexible Environment**: Supports different state representations and reward functions
 - **Modular Design**: Easy to swap different surrogate models or RL agents
-- **Custom GGPD Noise**: Specialized noise model for environment
+- **Diminishing GGPD Noise**: Specialized noise model for environment
 - **Benchmarking**: Compare performance of neural network vs. Gaussian Process approaches
