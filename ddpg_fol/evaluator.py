@@ -23,7 +23,7 @@ class Evaluator(object):
         for episode in range(self.num_episodes):
 
             # reset at the start of episode
-            observation = env.Reset()
+            observation = env.reset()
             episode_steps = 0
             episode_reward = 0.
                 
