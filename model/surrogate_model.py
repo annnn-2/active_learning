@@ -1,6 +1,4 @@
 from abc import ABC, abstractmethod
-import numpy as np
-
 
 class SurrogateModel(ABC):
 
@@ -19,8 +17,7 @@ class SurrogateModel(ABC):
 
         Returns
         -------
-        model: Surrogate fitted model
-        state: np.array model's parameters
+        
         """
         return self
 
@@ -36,13 +33,24 @@ class SurrogateModel(ABC):
         pass
         
     @abstractmethod
-    def Reset(self,X):
+    def params(self):
+        """
+        Placeholder for parameters method
+
+        Returns
+        -------
+        parameters: np.array model's flatten parameters
+        """
+        pass
+        
+    @abstractmethod
+    def Reset(self):
         """
         Placeholder for reset method
 
         Returns
         -------
-        state: np.array model's parameters
+
         """
         pass
    
