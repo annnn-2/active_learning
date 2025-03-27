@@ -11,8 +11,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import qmc
 
 from sklearn.metrics import mean_squared_error
-
-type Vector = List[float]
+from copy import deepcopy
 
 class Environment:
     """
@@ -32,46 +31,35 @@ class Environment:
         l_bounds: np.ndarray,
         u_bounds: np.ndarray,
         func: Callable[[np.ndarray, ...], np.ndarray],
-        model: Literal["NN", "smth", "smth"] = "NN",
+        model: Literal["NN", "NN_tf", "GP"] = "NN",
         model_param: dict = None,
+        state_mode: str = 'last_points',
+        N: int = 50,
         rnd_state: int = 32,
         verbose: bool = False
     ):
         
         # init model
+        self.state_mode = state_mode
+        self.seed = 32
         self.model: SurrogateModel
         self.surrogate_name: str = model
 
         model_param: dict = {} if model_param is None else model_param
 
-        self.model1 = self.init_model(
+        self.m = self.init_model(
             self.surrogate_name,
             **model_param
         )
-        self.model2 = self.init_model(
-            self.surrogate_name,
-            **model_param
-        )
-        self.model3 = self.init_model(
-            self.surrogate_name,
-            **model_param
-        )
-        self.model4 = self.init_model(
-            self.surrogate_name,
-            **model_param
-        )
-        self.model5 = self.init_model(
-            self.surrogate_name,
-            **model_param
-        )
-        
-        assert self.model1 and self.model2 and self.model3 and self.model4 and self.model5 is not None
+
+        self.l_bounds=l_bounds
+        self.u_bounds=u_bounds
 
         self.func = func
 
         self.prev_loss = 0.
 
-        self.max_iter = 150
+        self.max_iter = N
         self.cur_iter = 0
 
         #initial training set
@@ -88,96 +76,145 @@ class Environment:
         self.test_set = np.array(sample_scaled)
         self.test_set_y = func(self.test_set)
 
+        sample = sampler.random(n=20)
+        sample_scaled = qmc.scale(sample, l_bounds, u_bounds)
+        self.state_set = np.sort(np.array(sample_scaled),axis=0)
+    
+
         self.pred1 = []
-        for m in [self.model1,self.model2,self.model3,self.model4,self.model5]:
-            m.fit(self.X_init,self.y_init,first = True)
-            self.pred1.append(m.predict(self.test_set).flatten())
-        self.pred1 = np.sum(self.pred1,axis = 0)
+       
+        self.m.fit(self.X_init,self.y_init,first = True)
+        print(self.m.params())
+        
+        pred = self.m.predict(self.test_set)
+        self.mse_loss = mean_squared_error(self.test_set_y,pred)
+            
+        self.pred = self.m.predict(self.test_set)
+        self.N = N
 
     def init_model(self,
-                   model_name: Literal["NN", "smth"],
+                   model_name: Literal["NN", "NN_tf","GP"],
                    **model_args,):
-        """
-        Initialize model
 
-        """
         if model_name == "NN":
-            from model.NN import NN_model
+            from models.NN import NN_model
 
             return NN_model(**model_args)
+            
+        if model_name == "NN_tf":
+            from models.NN_tf import NN_tf_model
+
+            return NN_tf_model(**model_args)
+
+        if model_name == "GP":
+            from models.GP import GP_model
+
+            return GP_model(**model_args)
        
-    def Step(self,
+    def step(self,
              a: np.ndarray):
 
         self.cur_iter += 1
         truncated = False
         terminated = False
 
-        self.X = np.concatenate((self.X,[a]),axis=0)
-        self.y = np.concatenate((self.y,[self.func(a)]),axis=0)
+        self.pred_X = deepcopy(self.X)
+        self.pred_y = deepcopy(self.y)
 
-        for m in [self.model1,self.model2,self.model3,self.model4,self.model5]:
-            m.fit(self.X,self.y)
-
-        #_,model_state = self.model.fit(self.X,self.y)
-
-        #self.prev_loss = self.model.loss
-
-        #state = np.concatenate((model_state, self.model.predict(self.test_set).flatten(), self.X[-10:].flatten()))
-
-        pred2 = []
-        for m in [self.model1,self.model2,self.model3,self.model4,self.model5]:
-            pred2.append(m.predict(self.test_set).flatten())
-
-        state = np.concatenate((np.var(pred2,axis = 0), self.X[-20:].flatten()))
+        self.X = np.concatenate(([a],self.X),axis=0)
+        self.y = np.concatenate(([[self.func(a)]],self.y),axis=0)
         
-            
-        reward = mean_squared_error(self.test_set_y,np.mean(pred2,axis = 0))
+        self.pred_m = deepcopy(self.m)
+
+        self.m.fit(self.X[:-self.N+1],self.y[:-self.N+1])
+
+        pred = self.m.predict(self.test_set)
+
+        if self.state_mode == 'last_points':
+            if self.cur_iter<self.N:
+                state = self.X[:self.N].flatten()
+            else:
+                state = self.X[:self.N].flatten()
+                
+        elif self.state_mode == 'predictions+last_points':
+            if self.cur_iter<self.N:
+                state = np.concatenate((self.m.predict(self.state_set), self.X[-self.cur_iter:].flatten(),self.X[:self.N-self.cur_iter].flatten()))
+            else:
+                state = np.concatenate((self.m.predict(self.state_set), self.X[-self.N:].flatten()))
+                
+        elif self.state_mode == 'model_parameters':
+            pass
+                    
+        self.mse_loss = mean_squared_error(self.test_set_y,pred)
+        
+        L2 = mean_squared_error(pred,self.pred)  
+        self.pred = pred
+
+        reward = L2
 
         if self.cur_iter == self.max_iter:
-            self.cur_iter = 0
-            truncated = True
+                self.cur_iter = 0
+                truncated = True
+
+        if not truncated and self.cur_iter>1:
             
-        if reward < 0.001:
-            self.cur_iter = 0
-            terminated = True
-            reward = -1
+            if np.abs(L2-self.prev_reward) < 0.01:
+                
+                flag = 0
+                sample_scaled = np.linspace(-1,1,10).reshape(-1,1)
+                
+                for a in sample_scaled:
+                    if np.sqrt(mean_squared_error(self.m.predict([a]),[self.func(a)]))>0.08:
+                        flag = 1
+                        break
+               
+                if flag == 0:
+                    self.cur_iter = 0
+                    terminated = True
+                    reward = 1
+                
+        self.prev_reward = L2
+        self.observation_space = np.array(state)
+        self.action_space = np.array([a])
 
-        #print(state,reward,terminated,truncated)
-        
-        #return state,reward,terminated,truncated
-        return state,-reward,terminated,truncated
+     
+        return state,reward,terminated,truncated
 
-    def Reset(self):
+    def reset(self):
 
-        #model_state = self.model1.Reset()
-        for m in [self.model1,self.model2,self.model3,self.model4,self.model5]:
-            m.Reset()
+        self.m.Reset()
        
         self.X = self.X_init
         self.y = self.y_init
         self.cur_iter = 0
 
-        #state = np.concatenate((model_state,self.model.predict(self.test_set).flatten(), self.X[-10:].flatten()))
-        #state = np.concatenate((self.model.predict(self.test_set).flatten(), self.X[-10:].flatten()))
-        preds = np.var([self.model1.predict(self.test_set).flatten(),self.model2.predict(self.test_set).flatten(),\
-                                self.model3.predict(self.test_set).flatten(),self.model4.predict(self.test_set).flatten(),\
-                                self.model5.predict(self.test_set).flatten()], axis=0)
+        preds = self.m.predict(self.state_set)
+        
+        if self.state_mode == 'last_points':
+            state = self.X[:self.N].flatten()
+                
+        elif self.state_mode == 'predictions+last_points':
+            state = np.concatenate((preds,self.X[-self.N:].flatten()))
+                
+        elif self.state_mode == 'model_parameters':
+            pass
 
-        state = np.concatenate((preds,self.X[-20:].flatten()))
+        self.observation_space = np.array(state)
+        self.action_space = np.array([0])
+
+        self.pred = self.m.predict(self.test_set)
         
         return state
+  
 
     def toy_Plot(self,x):
 
         fig, ax = plt.subplots(figsize=(15, 3))
-
-        #y_pred = self.model.predict(x.reshape(-1,1)).flatten()
         
         y_pred = []
-        for m in [self.model1,self.model2,self.model3,self.model4,self.model5]:
+        for m in [self.m]:
             y_pred.append(m.predict(x.reshape(-1,1)))
-        y_pred = np.mean(y_pred,axis = 0).flatten()
+        y_pred = m.predict(x.reshape(-1,1))
 
 
         ax.plot()
