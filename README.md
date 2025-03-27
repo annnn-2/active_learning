@@ -33,7 +33,7 @@ active_learning/
 │   ├── NN_tf.py        # Neural Network TensorFlow surrogate model
 │   └── GP.py           # Gaussian Process surrogate model
 ├── ddpg_fol/           # DDPG algorithm implementations
-├── output/                   # Unit tests
+├── output/                   # Saved RL agent
 └── README.md                 # This file
 ```
 
