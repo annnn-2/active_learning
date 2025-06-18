@@ -12,17 +12,19 @@ class Evaluator(object):
         self.max_episode_length = max_episode_length
         self.interval = interval
         self.save_path = save_path
-        self.results = np.array([]).reshape(num_episodes,0)
+        self.results1 = np.array([]).reshape(num_episodes,0)
+        self.results2 = np.array([]).reshape(num_episodes,0)
 
-    def __call__(self, env, policy, debug=False, visualize=False, save=True):
+    def __call__(self, envs, policy, debug=False, visualize=False,use_step=False, save=True):
 
         self.is_training = False
+        self.use_step = use_step
         observation = None
-        result = []
+        result1 = []
+        result2 = []
 
-        for episode in range(self.num_episodes):
-
-            # reset at the start of episode
+        for env in envs:
+            
             observation = env.reset()
             episode_steps = 0
             episode_reward = 0.
@@ -31,41 +33,59 @@ class Evaluator(object):
 
             # start episode
             done = False
-            while not done:
+            while not done and episode_steps<40:
                 # basic operation, action ,reward, blablabla ...
                 action = policy(observation)
 
                 observation, reward, done, info = env.step(action)
                 #if self.max_episode_length and episode_steps >= self.max_episode_length -1:
-                if info:
-                    done = True
+                # if info:
+                #     done = True
                 
                 if visualize:
                     env.render(mode='human')
 
                 # update
-                episode_reward += reward
+                if not done:
+                    episode_reward += reward
+                    
                 episode_steps += 1
 
             if debug: prYellow('[Evaluate] #Episode{}: episode_reward:{}'.format(episode,episode_reward))
-            result.append(episode_reward)
+            
+            result1.append(episode_steps)
+            result2.append(episode_reward)
 
-        result = np.array(result).reshape(-1,1)
-        self.results = np.hstack([self.results, result])
+        result1 = np.array(result1).reshape(-1,1)
+        self.results1 = np.hstack([self.results1, result1])
+        
+        result2 = np.array(result2).reshape(-1,1)
+        self.results2 = np.hstack([self.results2, result2])
 
         if save:
-            self.save_results('{}/validate_reward'.format(self.save_path))
-        return np.mean(result)
+            self.save_results('{}/validate'.format(self.save_path))
+        return np.mean(result1),np.mean(result2)
 
     def save_results(self, fn):
 
-        y = np.mean(self.results, axis=0)
-        error=np.std(self.results, axis=0)
+        y = np.mean(self.results1, axis=0)
+        error=np.std(self.results1, axis=0)
                     
-        x = range(0,self.results.shape[1]*self.interval,self.interval)
+        x = range(0,self.results1.shape[1]*self.interval,self.interval)
         fig, ax = plt.subplots(1, 1, figsize=(6, 5))
         plt.xlabel('Timestep')
-        plt.ylabel('Average Reward')
+        plt.ylabel('Average step')
         ax.errorbar(x, y, yerr=error, fmt='-o')
-        plt.savefig(fn+'.png')
-        savemat(fn+'.mat', {'reward':self.results})
+        plt.savefig(fn+'step.png')
+        #savemat(fn+'step.mat', {'step':self.results1})
+
+        y = np.mean(self.results2, axis=0)
+        error=np.std(self.results2, axis=0)
+                    
+        x = range(0,self.results2.shape[1]*self.interval,self.interval)
+        fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+        plt.xlabel('Timestep')
+        plt.ylabel('Average reward')
+        ax.errorbar(x, y, yerr=error, fmt='-o')
+        plt.savefig(fn+'reward.png')
+        #savemat(fn+'reward.mat', {'reward':self.results2})
